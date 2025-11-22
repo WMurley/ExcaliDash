@@ -39,6 +39,9 @@ A self hosted dashboard and organizer for [Excalidraw](https://github.com/excali
 
 # Installation
 
+> [!CAUTION]
+> NOT for production use. This is just a side project (and also the first release), and it likely contains some bugs.
+
 ## Dockerhub (recommended)
 
 [Install Docker](https://docs.docker.com/desktop/)
