@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
+import { createServer } from "http";
+import { Server } from "socket.io";
 // @ts-ignore
 import { PrismaClient } from "./generated/client";
 
@@ -14,11 +16,93 @@ process.env.DATABASE_URL = `file:${dbPath}`;
 console.log("Resolved DATABASE_URL:", process.env.DATABASE_URL);
 
 const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*",
+  },
+  maxHttpBufferSize: 1e8, // 100 MB
+});
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 8000;
 
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
+
+// Socket.io Logic
+interface User {
+  id: string;
+  name: string;
+  initials: string;
+  color: string;
+  socketId: string;
+  isActive: boolean;
+}
+
+const roomUsers = new Map<string, User[]>();
+
+io.on("connection", (socket) => {
+  socket.on(
+    "join-room",
+    ({
+      drawingId,
+      user,
+    }: {
+      drawingId: string;
+      user: Omit<User, "socketId" | "isActive">;
+    }) => {
+      const roomId = `drawing_${drawingId}`;
+      socket.join(roomId);
+
+      const newUser: User = { ...user, socketId: socket.id, isActive: true };
+
+      const currentUsers = roomUsers.get(roomId) || [];
+      const filteredUsers = currentUsers.filter((u) => u.id !== user.id);
+      filteredUsers.push(newUser);
+      roomUsers.set(roomId, filteredUsers);
+
+      io.to(roomId).emit("presence-update", filteredUsers);
+    }
+  );
+
+  socket.on("cursor-move", (data) => {
+    const roomId = `drawing_${data.drawingId}`;
+    // Use volatile for high-frequency, low-importance updates (cursors)
+    // If network is congested, drop these packets
+    socket.volatile.to(roomId).emit("cursor-move", data);
+  });
+
+  socket.on("element-update", (data) => {
+    const roomId = `drawing_${data.drawingId}`;
+    socket.to(roomId).emit("element-update", data);
+  });
+
+  socket.on(
+    "user-activity",
+    ({ drawingId, isActive }: { drawingId: string; isActive: boolean }) => {
+      const roomId = `drawing_${drawingId}`;
+      const users = roomUsers.get(roomId);
+      if (users) {
+        const user = users.find((u) => u.socketId === socket.id);
+        if (user) {
+          user.isActive = isActive;
+          io.to(roomId).emit("presence-update", users);
+        }
+      }
+    }
+  );
+
+  socket.on("disconnect", () => {
+    roomUsers.forEach((users, roomId) => {
+      const index = users.findIndex((u) => u.socketId === socket.id);
+      if (index !== -1) {
+        users.splice(index, 1);
+        roomUsers.set(roomId, users);
+        io.to(roomId).emit("presence-update", users);
+      }
+    });
+  });
+});
 
 // --- Drawings ---
 
@@ -38,10 +122,7 @@ app.get("/drawings", async (req, res) => {
       where.collectionId = String(collectionId);
     } else {
       // Default: Exclude trash, but include unorganized (null)
-      where.OR = [
-        { collectionId: { not: "trash" } },
-        { collectionId: null },
-      ];
+      where.OR = [{ collectionId: { not: "trash" } }, { collectionId: null }];
     }
 
     const drawings = await prisma.drawing.findMany({
@@ -262,7 +343,7 @@ const ensureTrashCollection = async () => {
   }
 };
 
-app.listen(PORT, async () => {
+httpServer.listen(PORT, async () => {
   await ensureTrashCollection();
   console.log(`Server running on port ${PORT}`);
 });
