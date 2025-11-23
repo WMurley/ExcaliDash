@@ -3,14 +3,23 @@ import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
+import { promises as fsPromises } from "fs";
 import { createServer } from "http";
 import { Server } from "socket.io";
+import { Worker } from "worker_threads";
 import multer from "multer";
 import archiver from "archiver";
-import Database from "better-sqlite3";
 import { z } from "zod";
 // @ts-ignore
 import { PrismaClient } from "./generated/client";
+import {
+  sanitizeDrawingData,
+  validateImportedDrawing,
+  sanitizeText,
+  sanitizeSvg,
+  elementSchema,
+  appStateSchema,
+} from "./security";
 
 dotenv.config();
 
@@ -60,9 +69,38 @@ const allowedOrigins = normalizeOrigins(process.env.FRONTEND_URL);
 console.log("Allowed origins:", allowedOrigins);
 
 const uploadDir = path.resolve(__dirname, "../uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+
+const moveFile = async (source: string, destination: string) => {
+  try {
+    await fsPromises.rename(source, destination);
+  } catch (error) {
+    const err = error as NodeJS.ErrnoException;
+    if (!err || err.code !== "EXDEV") {
+      throw error;
+    }
+
+    // Cross-device rename fallback: copy then delete source
+    await fsPromises
+      .unlink(destination)
+      .catch((unlinkError: NodeJS.ErrnoException) => {
+        if (unlinkError && unlinkError.code !== "ENOENT") {
+          throw unlinkError;
+        }
+      });
+
+    await fsPromises.copyFile(source, destination);
+    await fsPromises.unlink(source);
+  }
+};
+
+// Initialize upload directory asynchronously
+const initializeUploadDir = async () => {
+  try {
+    await fsPromises.mkdir(uploadDir, { recursive: true });
+  } catch (error) {
+    console.error("Failed to create upload directory:", error);
+  }
+};
 
 const app = express();
 const httpServer = createServer(app);
@@ -76,8 +114,26 @@ const io = new Server(httpServer, {
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 8000;
 
-// Multer setup for file uploads
-const upload = multer({ dest: uploadDir });
+// Multer setup for file uploads with streaming support
+const upload = multer({
+  dest: uploadDir,
+  limits: {
+    fileSize: 100 * 1024 * 1024, // 100MB limit
+    files: 1, // Only one file per upload
+  },
+  fileFilter: (req, file, cb) => {
+    // Only allow SQLite database extensions for database imports
+    if (file.fieldname === "db") {
+      const isSqliteDb =
+        file.originalname.endsWith(".db") ||
+        file.originalname.endsWith(".sqlite");
+      if (!isSqliteDb) {
+        return cb(new Error("Only .db or .sqlite files are allowed"));
+      }
+    }
+    cb(null, true);
+  },
+});
 
 app.use(
   cors({
@@ -88,9 +144,73 @@ app.use(
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-const elementsSchema = z.array(z.object({}).passthrough());
+// Log large requests for monitoring and debugging
+app.use((req, res, next) => {
+  const contentLength = req.headers["content-length"];
+  if (contentLength) {
+    const sizeInMB = parseInt(contentLength, 10) / 1024 / 1024;
+    if (sizeInMB > 10) {
+      console.log(
+        `[LARGE REQUEST] ${req.method} ${req.path} - ${sizeInMB.toFixed(
+          2
+        )}MB - Content-Length: ${contentLength} bytes`
+      );
+    }
+  }
+  next();
+});
 
-const appStateSchema = z.object({}).passthrough();
+// Security middleware - Add security headers
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader(
+    "Permissions-Policy",
+    "geolocation=(), microphone=(), camera=()"
+  );
+
+  // Content Security Policy - restrict sources
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; " +
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com; " +
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+      "font-src 'self' https://fonts.gstatic.com; " +
+      "img-src 'self' data: blob: https:; " +
+      "connect-src 'self' ws: wss:; " +
+      "frame-ancestors 'none';"
+  );
+
+  next();
+});
+
+// Rate limiting middleware (basic implementation)
+const requestCounts = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
+const RATE_LIMIT_MAX_REQUESTS = 1000; // Max requests per window
+
+app.use((req, res, next) => {
+  const ip = req.ip || req.connection.remoteAddress || "unknown";
+  const now = Date.now();
+  const clientData = requestCounts.get(ip);
+
+  if (!clientData || now > clientData.resetTime) {
+    requestCounts.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
+    return next();
+  }
+
+  if (clientData.count >= RATE_LIMIT_MAX_REQUESTS) {
+    return res.status(429).json({
+      error: "Rate limit exceeded",
+      message: "Too many requests, please try again later",
+    });
+  }
+
+  clientData.count++;
+  next();
+});
 
 const filesFieldSchema = z
   .union([z.record(z.string(), z.any()), z.null()])
@@ -103,17 +223,84 @@ const drawingBaseSchema = z.object({
   preview: z.string().nullable().optional(),
 });
 
-const drawingCreateSchema = drawingBaseSchema.extend({
-  elements: elementsSchema.default([]),
-  appState: appStateSchema.default({}),
-  files: filesFieldSchema,
-});
+// Use strict schemas from security module with sanitization
+const drawingCreateSchema = drawingBaseSchema
+  .extend({
+    elements: elementSchema.array().default([]),
+    appState: appStateSchema.default({}),
+    files: filesFieldSchema,
+  })
+  .refine(
+    (data) => {
+      // Apply sanitization before database persistence
+      try {
+        const sanitized = sanitizeDrawingData(data);
+        // Merge sanitized data back with original properties
+        Object.assign(data, sanitized);
+        return true;
+      } catch (error) {
+        console.error("Sanitization failed:", error);
+        return false;
+      }
+    },
+    {
+      message: "Invalid or malicious drawing data detected",
+    }
+  );
 
-const drawingUpdateSchema = drawingBaseSchema.extend({
-  elements: elementsSchema.optional(),
-  appState: appStateSchema.optional(),
-  files: filesFieldSchema,
-});
+const drawingUpdateSchema = drawingBaseSchema
+  .extend({
+    elements: elementSchema.array().optional(),
+    appState: appStateSchema.optional(),
+    files: filesFieldSchema,
+  })
+  .refine(
+    (data) => {
+      // Apply sanitization before database persistence
+      try {
+        // Only sanitize provided fields
+        const sanitizedData = { ...data };
+        if (data.elements !== undefined || data.appState !== undefined) {
+          const fullData = {
+            elements: Array.isArray(data.elements) ? data.elements : [],
+            appState:
+              typeof data.appState === "object" && data.appState !== null
+                ? data.appState
+                : {},
+            files: data.files || {},
+            preview: data.preview,
+            name: data.name,
+            collectionId: data.collectionId,
+          };
+          const sanitized = sanitizeDrawingData(fullData);
+          sanitizedData.elements = sanitized.elements;
+          sanitizedData.appState = sanitized.appState;
+          if (data.files !== undefined) sanitizedData.files = sanitized.files;
+          if (data.preview !== undefined)
+            sanitizedData.preview = sanitized.preview;
+          Object.assign(data, sanitizedData);
+        }
+        return true;
+      } catch (error) {
+        console.error("Sanitization failed:", error);
+        // For updates, if sanitization fails but we have minimal data, allow it to pass
+        // This prevents legitimate empty drawings from failing
+        if (
+          data.elements === undefined &&
+          data.appState === undefined &&
+          (data.name !== undefined ||
+            data.preview !== undefined ||
+            data.collectionId !== undefined)
+        ) {
+          return true;
+        }
+        return false;
+      }
+    },
+    {
+      message: "Invalid or malicious drawing data detected",
+    }
+  );
 
 const respondWithValidationErrors = (
   res: express.Response,
@@ -125,29 +312,90 @@ const respondWithValidationErrors = (
   });
 };
 
-const runIntegrityCheck = (filePath: string): boolean => {
-  let dbInstance: Database.Database | undefined;
+const validateSqliteHeader = (filePath: string): boolean => {
   try {
-    dbInstance = new Database(filePath, {
-      readonly: true,
-      fileMustExist: true,
-    });
-    const result = dbInstance.prepare("PRAGMA integrity_check;").get();
-    return result?.integrity_check === "ok";
+    const buffer = Buffer.alloc(16);
+    const fd = fs.openSync(filePath, "r");
+    const bytesRead = fs.readSync(fd, buffer, 0, 16, 0);
+    fs.closeSync(fd);
+
+    if (bytesRead < 16) {
+      console.warn("File too small to be a valid SQLite database");
+      return false;
+    }
+
+    // SQLite format 3 header: "SQLite format 3\0" (16 bytes)
+    // Hex: 53 51 4c 69 74 65 20 66 6f 72 6d 61 74 20 33 00
+    const expectedHeader = Buffer.from([
+      0x53, 0x51, 0x4c, 0x69, 0x74, 0x65, 0x20, 0x66, 0x6f, 0x72, 0x6d, 0x61,
+      0x74, 0x20, 0x33, 0x00,
+    ]);
+
+    const isValid = buffer.equals(expectedHeader);
+    if (!isValid) {
+      console.warn("Invalid SQLite file header detected", {
+        filePath,
+        header: buffer.toString("hex"),
+        expected: expectedHeader.toString("hex"),
+      });
+    }
+
+    return isValid;
   } catch (error) {
-    console.error("Integrity check failed:", error);
+    console.error("Failed to validate SQLite header:", error);
     return false;
-  } finally {
-    dbInstance?.close();
   }
 };
+// Non-blocking CPU check using worker threads while still verifying headers
+const verifyDatabaseIntegrityAsync = (filePath: string): Promise<boolean> => {
+  if (!validateSqliteHeader(filePath)) {
+    return Promise.resolve(false);
+  }
 
-const removeFileIfExists = (filePath?: string) => {
+  return new Promise((resolve) => {
+    const worker = new Worker(
+      path.resolve(__dirname, "./workers/db-verify.js"),
+      {
+        workerData: { filePath },
+      }
+    );
+    let timeoutHandle: NodeJS.Timeout;
+    let settled = false;
+
+    const finish = (result: boolean) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutHandle);
+      resolve(result);
+    };
+
+    worker.on("message", (isValid: boolean) => finish(isValid));
+    worker.on("error", (err) => {
+      console.error("Worker error:", err);
+      finish(false);
+    });
+    worker.on("exit", (code) => {
+      if (code !== 0) {
+        finish(false);
+      }
+    });
+
+    timeoutHandle = setTimeout(() => {
+      console.warn("Integrity check worker timed out", { filePath });
+      worker.terminate();
+      finish(false);
+    }, 10000); // 10 second timeout
+  });
+};
+
+const removeFileIfExists = async (filePath?: string) => {
   if (!filePath) return;
   try {
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
+    await fsPromises.access(filePath).catch(() => {
+      // File doesn't exist, nothing to remove
+      return;
+    });
+    await fsPromises.unlink(filePath);
   } catch (error) {
     console.error("Failed to remove file", { filePath, error });
   }
@@ -312,6 +560,17 @@ app.get("/drawings/:id", async (req, res) => {
 // POST /drawings
 app.post("/drawings", async (req, res) => {
   try {
+    // Additional security validation for imported data
+    const isImportedDrawing = req.headers["x-imported-file"] === "true";
+
+    if (isImportedDrawing && !validateImportedDrawing(req.body)) {
+      return res.status(400).json({
+        error: "Invalid imported drawing file",
+        message:
+          "The imported file contains potentially malicious content or invalid structure",
+      });
+    }
+
     const parsed = drawingCreateSchema.safeParse(req.body);
     if (!parsed.success) {
       return respondWithValidationErrors(res, parsed.error.issues);
@@ -340,6 +599,7 @@ app.post("/drawings", async (req, res) => {
       files: JSON.parse(newDrawing.files || "{}"),
     });
   } catch (error) {
+    console.error("Failed to create drawing:", error);
     res.status(500).json({ error: "Failed to create drawing" });
   }
 });
@@ -348,8 +608,32 @@ app.post("/drawings", async (req, res) => {
 app.put("/drawings/:id", async (req, res) => {
   try {
     const { id } = req.params;
+
+    console.log("[API] Update request received", {
+      id,
+      bodyKeys: Object.keys(req.body || {}),
+      hasElements: req.body?.elements !== undefined,
+      elementCount: Array.isArray(req.body?.elements)
+        ? req.body.elements.length
+        : undefined,
+      hasAppState: req.body?.appState !== undefined,
+      appStateKeys: req.body?.appState ? Object.keys(req.body.appState) : [],
+      hasFiles: req.body?.files !== undefined,
+      hasPreview: req.body?.preview !== undefined,
+    });
+
     const parsed = drawingUpdateSchema.safeParse(req.body);
     if (!parsed.success) {
+      console.error("[API] Validation failed", {
+        id,
+        errorCount: parsed.error.issues.length,
+        errors: parsed.error.issues.map((issue) => ({
+          path: issue.path,
+          message: issue.message,
+          received:
+            issue.path.length > 0 ? req.body?.[issue.path.join(".")] : "root",
+        })),
+      });
       return respondWithValidationErrors(res, parsed.error.issues);
     }
 
@@ -404,6 +688,7 @@ app.put("/drawings/:id", async (req, res) => {
       files: JSON.parse(updatedDrawing.files || "{}"),
     });
   } catch (error) {
+    console.error("[CRITICAL] Update failed:", error);
     res.status(500).json({ error: "Failed to update drawing" });
   }
 });
@@ -518,12 +803,19 @@ app.delete("/collections/:id", async (req, res) => {
 
 // --- Export/Import Endpoints ---
 
-// GET /export - Export SQLite database
+// GET /export - Export SQLite database (supports .sqlite and .db extensions)
 app.get("/export", async (req, res) => {
   try {
+    const formatParam =
+      typeof req.query.format === "string"
+        ? req.query.format.toLowerCase()
+        : undefined;
+    const extension = formatParam === "db" ? "db" : "sqlite";
     const dbPath = path.resolve(__dirname, "../prisma/dev.db");
 
-    if (!fs.existsSync(dbPath)) {
+    try {
+      await fsPromises.access(dbPath);
+    } catch {
       return res.status(404).json({ error: "Database file not found" });
     }
 
@@ -532,7 +824,7 @@ app.get("/export", async (req, res) => {
       "Content-Disposition",
       `attachment; filename="excalidash-db-${
         new Date().toISOString().split("T")[0]
-      }.sqlite"`
+      }.${extension}"`
     );
 
     const fileStream = fs.createReadStream(dbPath);
@@ -645,18 +937,18 @@ app.post("/import/sqlite/verify", upload.single("db"), async (req, res) => {
     }
 
     const stagedPath = req.file.path;
-    const isValid = runIntegrityCheck(stagedPath);
-    removeFileIfExists(stagedPath);
+    const isValid = await verifyDatabaseIntegrityAsync(stagedPath);
+    await removeFileIfExists(stagedPath);
 
     if (!isValid) {
-      return res.status(400).json({ error: "Invalid SQLite file" });
+      return res.status(400).json({ error: "Invalid database format" });
     }
 
     res.json({ valid: true, message: "Database file is valid" });
   } catch (error) {
     console.error(error);
     if (req.file) {
-      removeFileIfExists(req.file.path);
+      await removeFileIfExists(req.file.path);
     }
     res.status(500).json({ error: "Failed to verify database file" });
   }
@@ -676,17 +968,17 @@ app.post("/import/sqlite", upload.single("db"), async (req, res) => {
     );
 
     try {
-      fs.renameSync(originalPath, stagedPath);
+      await moveFile(originalPath, stagedPath);
     } catch (error) {
       console.error("Failed to stage uploaded database", error);
-      removeFileIfExists(originalPath);
-      removeFileIfExists(stagedPath);
+      await removeFileIfExists(originalPath);
+      await removeFileIfExists(stagedPath);
       return res.status(500).json({ error: "Failed to stage uploaded file" });
     }
 
-    const isValid = runIntegrityCheck(stagedPath);
+    const isValid = await verifyDatabaseIntegrityAsync(stagedPath);
     if (!isValid) {
-      removeFileIfExists(stagedPath);
+      await removeFileIfExists(stagedPath);
       return res
         .status(400)
         .json({ error: "Uploaded database failed integrity check" });
@@ -696,13 +988,20 @@ app.post("/import/sqlite", upload.single("db"), async (req, res) => {
     const backupPath = path.resolve(__dirname, "../prisma/dev.db.backup");
 
     try {
-      if (fs.existsSync(dbPath)) {
-        fs.copyFileSync(dbPath, backupPath);
+      // Use async file operations instead of blocking ones
+      try {
+        await fsPromises.access(dbPath);
+        // Database exists, create backup
+        await fsPromises.copyFile(dbPath, backupPath);
+      } catch {
+        // Database doesn't exist, skip backup
       }
-      fs.renameSync(stagedPath, dbPath);
+
+      // Move staged file to final location, supporting cross-device mounts
+      await moveFile(stagedPath, dbPath);
     } catch (error) {
       console.error("Failed to replace database", error);
-      removeFileIfExists(stagedPath);
+      await removeFileIfExists(stagedPath);
       return res.status(500).json({ error: "Failed to replace database" });
     }
 
@@ -713,7 +1012,7 @@ app.post("/import/sqlite", upload.single("db"), async (req, res) => {
   } catch (error) {
     console.error(error);
     if (req.file) {
-      removeFileIfExists(req.file.path);
+      await removeFileIfExists(req.file.path);
     }
     res.status(500).json({ error: "Failed to import database" });
   }
@@ -737,6 +1036,8 @@ const ensureTrashCollection = async () => {
 };
 
 httpServer.listen(PORT, async () => {
+  // Initialize upload directory asynchronously to avoid blocking startup
+  await initializeUploadDir();
   await ensureTrashCollection();
   console.log(`Server running on port ${PORT}`);
 });

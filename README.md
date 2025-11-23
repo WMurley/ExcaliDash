@@ -1,6 +1,6 @@
 <img src="logoExcaliDash.png" alt="ExcaliDash Logo" width="80" height="88">
 
-# ExcaliDash v0.1.0
+# ExcaliDash v0.1.5
 
 ![License](https://img.shields.io/github/license/zimengxiong/ExcaliDash)
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://hub.docker.com)
@@ -74,7 +74,10 @@ See [release notes](https://github.com/ZimengXiong/ExcaliDash/releases) for a sp
 # Installation
 
 > [!CAUTION]
-> NOT for production use. This is just a side project (and also the first release), and it likely contains some bugs. DO NOT open ports to the internet (e.g. CORS is set to allow all)
+> NOT for production use. While attempts have been made at hardening (XSS/dompurify, CORS, rate-limiting, sanitization) have been made, they are inadequate for public deployment. Do not expose any ports. Currently lacking CSRF.
+
+> [!CAUTION]
+> ExcaliDash is in BETA. Please backup your data regularly (e.g. with cron).
 
 ## Docker Hub (Recommended)
 

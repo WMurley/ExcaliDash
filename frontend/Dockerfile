@@ -1,16 +1,23 @@
 # Build stage
 FROM node:20-alpine AS builder
 
-WORKDIR /app
+WORKDIR /app/frontend
 
-# Copy package files
-COPY package*.json ./
+# Copy package files first for better caching
+COPY frontend/package*.json ./
 
 # Install dependencies
 RUN npm ci
 
 # Copy source code and config files
-COPY . .
+COPY frontend/ ./
+COPY VERSION ../VERSION
+
+# Build arguments
+ARG VITE_APP_VERSION
+ARG VITE_APP_BUILD_LABEL
+ENV VITE_APP_VERSION=$VITE_APP_VERSION
+ENV VITE_APP_BUILD_LABEL=$VITE_APP_BUILD_LABEL
 
 # Build the application
 RUN npm run build
@@ -19,10 +26,10 @@ RUN npm run build
 FROM nginx:alpine
 
 # Copy custom nginx config
-COPY nginx.conf /etc/nginx/nginx.conf
+COPY frontend/nginx.conf /etc/nginx/nginx.conf
 
 # Copy built application from builder
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /app/frontend/dist /usr/share/nginx/html
 
 EXPOSE 80
 
