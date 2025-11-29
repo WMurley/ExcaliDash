@@ -20,11 +20,11 @@ Before building Docker images, verify the configuration:
 ### Configuration Validation
 
 - [ ] `build-and-push.sh` updated with correct Docker Hub username
-- [ ] `build-and-push.sh` updated with correct `BACKEND_URL` (e.g., `https://api-draw.fuuzifylab.com`)
+- [ ] `build-and-push.sh` updated with correct `BACKEND_URL` (e.g., `https://api-draw.yourdomain.com`)
 - [ ] `docker-compose.coolify.yml` updated with your Docker Hub username
 - [ ] `docker-compose.coolify.yml` has correct `FRONTEND_URL` in backend environment
 - [ ] DNS A records created for both frontend and backend domains
-- [ ] DNS propagation complete (test with `nslookup draw.fuuzifylab.com`)
+- [ ] DNS propagation complete (test with `nslookup draw.yourdomain.com`)
 
 ### Build System Check
 
@@ -134,7 +134,7 @@ sleep 5
 - [ ] Open browser DevTools → Network tab
 - [ ] Refresh the page
 - [ ] Look for API requests
-- [ ] Confirm they're going to your configured backend URL (e.g., `https://api-draw.fuuzifylab.com`)
+- [ ] Confirm they're going to your configured backend URL (e.g., `https://api-draw.yourdomain.com`)
 - [ ] NOT going to `/api/*` or `localhost`
 
 **Cleanup:**
@@ -223,7 +223,7 @@ After deploying to Coolify, verify everything works in production.
 
 ```bash
 # Test backend health
-curl https://api-draw.fuuzifylab.com/health
+curl https://api-draw.yourdomain.com/health
 
 # Expected: {"status":"ok"}
 ```
@@ -237,7 +237,7 @@ curl https://api-draw.fuuzifylab.com/health
 
 ```bash
 # Test frontend
-curl -I https://draw.fuuzifylab.com
+curl -I https://draw.yourdomain.com
 
 # Expected: HTTP/2 200
 ```
@@ -251,7 +251,7 @@ curl -I https://draw.fuuzifylab.com
 
 **Open Frontend in Browser:**
 
-- [ ] Navigate to `https://draw.fuuzifylab.com`
+- [ ] Navigate to `https://draw.yourdomain.com`
 - [ ] Open DevTools → Console
 - [ ] **No CORS errors in console**
 - [ ] **No 502/503/504 errors**
@@ -262,7 +262,7 @@ curl -I https://draw.fuuzifylab.com
 - [ ] Open DevTools → Network tab
 - [ ] Refresh page
 - [ ] Look for API calls (e.g., `/drawings`, `/library`)
-- [ ] Verify they're going to `https://api-draw.fuuzifylab.com`
+- [ ] Verify they're going to `https://api-draw.yourdomain.com`
 - [ ] All API calls return 200 OK (or appropriate status codes)
 - [ ] No preflight CORS failures
 
@@ -405,10 +405,10 @@ If using collaboration features:
 
 ```bash
 # Time backend health check
-time curl https://api-draw.fuuzifylab.com/health
+time curl https://api-draw.yourdomain.com/health
 
 # Time drawings list
-time curl https://api-draw.fuuzifylab.com/drawings
+time curl https://api-draw.yourdomain.com/drawings
 ```
 
 - [ ] Health check < 200ms
@@ -449,7 +449,7 @@ time curl https://api-draw.fuuzifylab.com/drawings
 
 ### Basic Auth (if enabled)
 
-- [ ] Visit `https://draw.fuuzifylab.com`
+- [ ] Visit `https://draw.yourdomain.com`
 - [ ] Prompted for username/password
 - [ ] Wrong credentials rejected
 - [ ] Correct credentials grant access
@@ -485,7 +485,7 @@ time curl https://api-draw.fuuzifylab.com/drawings
 # Try to access API from different origin (should fail)
 curl -H "Origin: https://evil.com" \
   -H "Access-Control-Request-Method: GET" \
-  https://api-draw.fuuzifylab.com/drawings
+  https://api-draw.yourdomain.com/drawings
 ```
 
 - [ ] Request is blocked or returns CORS error
@@ -503,7 +503,7 @@ curl -H "Origin: https://evil.com" \
 
 ### Backend Health Check Fails
 
-**Symptoms:** `curl https://api-draw.fuuzifylab.com/health` returns error
+**Symptoms:** `curl https://api-draw.yourdomain.com/health` returns error
 
 **Check:**
 1. Backend service running in Coolify?
@@ -529,7 +529,7 @@ curl -H "Origin: https://evil.com" \
 ```yaml
 # In docker-compose.coolify.yml
 environment:
-  - FRONTEND_URL=https://draw.fuuzifylab.com
+  - FRONTEND_URL=https://draw.yourdomain.com
 ```
 Redeploy backend.
 

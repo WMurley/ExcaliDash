@@ -32,8 +32,8 @@ Before you begin, ensure you have:
 
 ### Recommended Setup
 For this guide, we'll use:
-- **Frontend domain**: `draw.fuuzifylab.com` (or your domain)
-- **Backend domain**: `api-draw.fuuzifylab.com` (or your domain)
+- **Frontend domain**: `draw.yourdomain.com` (or your domain)
+- **Backend domain**: `api-draw.yourdomain.com` (or your domain)
 
 Both domains should point to your Coolify server's IP address.
 
@@ -47,11 +47,11 @@ ExcaliDash consists of two services:
 ┌─────────────────────────────────────────────────────────┐
 │ User Browser                                             │
 │   ↓                                                      │
-│   draw.fuuzifylab.com (Frontend - Static React App)    │
+│   draw.yourdomain.com (Frontend - Static React App)    │
 │   ↓                                                      │
 │   → Makes API calls to →                                │
 │   ↓                                                      │
-│   api-draw.fuuzifylab.com (Backend - Express + SQLite) │
+│   api-draw.yourdomain.com (Backend - Express + SQLite) │
 │   ↓                                                      │
 │   SQLite Database (in Docker volume)                    │
 └─────────────────────────────────────────────────────────┘
@@ -86,7 +86,7 @@ ExcaliDash consists of two services:
    DOCKER_USERNAME="your-dockerhub-username"
 
    # Your backend API URL (full URL with https://)
-   BACKEND_URL="https://api-draw.fuuzifylab.com"
+   BACKEND_URL="https://api-draw.yourdomain.com"
    ```
 
 4. **Save and exit** (Ctrl+O, Enter, Ctrl+X in nano)
@@ -153,7 +153,7 @@ Visit `https://hub.docker.com/u/your-username` and confirm both images are prese
 3. **Update environment variables** if needed:
    ```yaml
    environment:
-     - FRONTEND_URL=https://draw.fuuzifylab.com  # Your frontend domain
+     - FRONTEND_URL=https://draw.yourdomain.com  # Your frontend domain
    ```
 
 4. **Save the file**
@@ -178,7 +178,7 @@ Visit `https://hub.docker.com/u/your-username` and confirm both images are prese
 
 1. Navigate to **excalidash** → **backend** service
 2. Click **"Domains"** tab
-3. Add domain: `api-draw.fuuzifylab.com`
+3. Add domain: `api-draw.yourdomain.com`
 4. **Enable SSL/TLS** (Let's Encrypt automatic)
 5. Save
 
@@ -186,7 +186,7 @@ Visit `https://hub.docker.com/u/your-username` and confirm both images are prese
 
 1. Navigate to **excalidash** → **frontend** service
 2. Click **"Domains"** tab
-3. Add domain: `draw.fuuzifylab.com`
+3. Add domain: `draw.yourdomain.com`
 4. **Enable SSL/TLS** (Let's Encrypt automatic)
 5. Save
 
@@ -195,8 +195,8 @@ Visit `https://hub.docker.com/u/your-username` and confirm both images are prese
 In your DNS provider (Cloudflare, Route53, etc.), add these A records:
 
 ```
-draw.fuuzifylab.com       → A → YOUR_COOLIFY_SERVER_IP
-api-draw.fuuzifylab.com   → A → YOUR_COOLIFY_SERVER_IP
+draw.yourdomain.com       → A → YOUR_COOLIFY_SERVER_IP
+api-draw.yourdomain.com   → A → YOUR_COOLIFY_SERVER_IP
 ```
 
 **Wait for DNS propagation** (usually 1-5 minutes, can take up to 24 hours)
@@ -218,7 +218,7 @@ api-draw.fuuzifylab.com   → A → YOUR_COOLIFY_SERVER_IP
 
 ### Step 6: Verify Deployment
 
-1. **Visit your frontend**: `https://draw.fuuzifylab.com`
+1. **Visit your frontend**: `https://draw.yourdomain.com`
 2. You should see the ExcaliDash interface
 3. **Create a test drawing** and save it
 4. **Refresh the page** - drawing should persist
@@ -235,14 +235,14 @@ api-draw.fuuzifylab.com   → A → YOUR_COOLIFY_SERVER_IP
 |----------|---------|-------------|
 | `PORT` | `3002` | Backend server port (internal) |
 | `NODE_ENV` | `production` | Node environment |
-| `FRONTEND_URL` | (required) | Your frontend URL for CORS (e.g., `https://draw.fuuzifylab.com`) |
+| `FRONTEND_URL` | (required) | Your frontend URL for CORS (e.g., `https://draw.yourdomain.com`) |
 | `DATABASE_URL` | `file:/app/prisma/dev.db` | SQLite database path |
 
 #### Frontend (Build-time only)
 
 | Variable | Description |
 |----------|-------------|
-| `BACKEND_URL` | Set in `build-and-push.sh` - Full backend URL (e.g., `https://api-draw.fuuzifylab.com`) |
+| `BACKEND_URL` | Set in `build-and-push.sh` - Full backend URL (e.g., `https://api-draw.yourdomain.com`) |
 
 ### Adding Basic Authentication (Optional)
 
@@ -261,7 +261,7 @@ If you need multiple frontend domains (e.g., production + staging):
 
 ```yaml
 environment:
-  - FRONTEND_URL=https://draw.fuuzifylab.com,https://staging.fuuzifylab.com
+  - FRONTEND_URL=https://draw.yourdomain.com,https://staging.yourdomain.com
 ```
 
 Separate multiple URLs with commas (no spaces).
@@ -297,7 +297,7 @@ docker run --rm \
 
 #### Method 2: Using ExcaliDash Export Feature
 
-1. Visit your backend: `https://api-draw.fuuzifylab.com/export`
+1. Visit your backend: `https://api-draw.yourdomain.com/export`
 2. This downloads the SQLite database file
 3. Save this file securely
 
@@ -334,7 +334,7 @@ docker compose up -d
 
 #### Restore from Database Export
 
-1. Visit: `https://api-draw.fuuzifylab.com/import/sqlite`
+1. Visit: `https://api-draw.yourdomain.com/import/sqlite`
 2. Use the import functionality (requires backend rebuild with upload enabled)
 
 ---
@@ -400,14 +400,14 @@ Coolify will pull the new `latest` tags and restart services.
    ```yaml
    # In docker-compose.coolify.yml
    environment:
-     - FRONTEND_URL=https://draw.fuuzifylab.com
+     - FRONTEND_URL=https://draw.yourdomain.com
    ```
    Must match your actual frontend domain (with `https://`)
 
 4. **DNS issues:**
    ```bash
    # Test DNS resolution
-   nslookup api-draw.fuuzifylab.com
+   nslookup api-draw.yourdomain.com
    ```
 
 5. **SSL certificate issues:**
@@ -466,7 +466,7 @@ docker builder prune -a
 
 3. **Test direct connection:**
    ```bash
-   curl https://api-draw.fuuzifylab.com/health
+   curl https://api-draw.yourdomain.com/health
    ```
    Should return `{"status":"ok"}`
 
@@ -577,7 +577,7 @@ If deploying without Coolify:
    # Frontend
    server {
        listen 443 ssl;
-       server_name draw.fuuzifylab.com;
+       server_name draw.yourdomain.com;
 
        location / {
            proxy_pass http://localhost:6767;
@@ -587,7 +587,7 @@ If deploying without Coolify:
    # Backend
    server {
        listen 443 ssl;
-       server_name api-draw.fuuzifylab.com;
+       server_name api-draw.yourdomain.com;
 
        location / {
            proxy_pass http://localhost:3002;

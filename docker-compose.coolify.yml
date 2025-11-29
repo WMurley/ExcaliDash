@@ -13,8 +13,8 @@ version: '3.8'
 # Coolify Configuration:
 #   - Domains and Traefik labels are configured via Coolify UI
 #   - This file focuses on service definitions only
-#   - Frontend domain: draw.fuuzifylab.com (or your domain)
-#   - Backend domain: api-draw.fuuzifylab.com (or your domain)
+#   - Frontend domain: draw.yourdomain.com (or your domain)
+#   - Backend domain: api-draw.yourdomain.com (or your domain)
 # ============================================================================
 
 services:
@@ -33,8 +33,8 @@ services:
 
       # CORS Configuration - Frontend URL(s)
       # For multiple origins, separate with commas
-      # Example: https://draw.fuuzifylab.com,https://draw.example.com
-      - FRONTEND_URL=https://draw.fuuzifylab.com
+      # Example: https://draw.yourdomain.com,https://draw.example.com
+      - FRONTEND_URL=https://draw.yourdomain.com
 
       # Database Configuration
       # Using SQLite with volume mount for persistence

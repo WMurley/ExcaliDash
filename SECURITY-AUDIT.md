@@ -180,13 +180,13 @@ The files I created for you (`build-and-push.sh`, `docker-compose.coolify.yml`, 
 ```bash
 # In build-and-push.sh
 DOCKER_USERNAME="your-dockerhub-username"  # Placeholder
-BACKEND_URL="https://api-draw.fuuzifylab.com"  # Example domain
+BACKEND_URL="https://api-draw.yourdomain.com"  # Example domain
 ```
 
 ```yaml
 # In docker-compose.coolify.yml
 image: YOUR-DOCKERHUB-USERNAME/excalidash-backend:latest  # Placeholder
-FRONTEND_URL=https://draw.fuuzifylab.com  # Example domain
+FRONTEND_URL=https://draw.yourdomain.com  # Example domain
 ```
 
 **These are safe** because:

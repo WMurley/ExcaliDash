@@ -26,8 +26,8 @@ DOCKER_USERNAME="your-dockerhub-username"
 
 # Your backend API URL (where frontend will send requests)
 # Must be the full URL including protocol
-# Example: https://api-draw.fuuzifylab.com
-BACKEND_URL="https://api-draw.fuuzifylab.com"
+# Example: https://api-draw.yourdomain.com
+BACKEND_URL="https://api-draw.yourdomain.com"
 
 # Version tag for your images
 # Automatically read from VERSION file if it exists
@@ -75,7 +75,7 @@ if [ "${DOCKER_USERNAME}" = "your-dockerhub-username" ]; then
     exit 1
 fi
 
-if [ "${BACKEND_URL}" = "https://api-draw.fuuzifylab.com" ]; then
+if [ "${BACKEND_URL}" = "https://api-draw.yourdomain.com" ]; then
     echo "Warning: Using default BACKEND_URL. Make sure this is correct."
     read -p "Continue? (y/n) " -n 1 -r
     echo

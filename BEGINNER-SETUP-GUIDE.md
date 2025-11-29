@@ -160,21 +160,21 @@ Find this section near the top:
 ```bash
 # BEFORE (placeholder values):
 DOCKER_USERNAME="your-dockerhub-username"
-BACKEND_URL="https://api-draw.fuuzifylab.com"
+BACKEND_URL="https://api-draw.yourdomain.com"
 ```
 
 Change to YOUR actual values:
 ```bash
 # AFTER (your real values):
 DOCKER_USERNAME="johnsmith"  # ← Your Docker Hub username
-BACKEND_URL="https://api-draw.fuuzifylab.com"  # ← Your actual backend domain
+BACKEND_URL="https://api-draw.yourdomain.com"  # ← Your actual backend domain
 ```
 
 **Example:**
-If your Docker Hub username is `johnsmith` and your backend domain is `api-draw.fuuzifylab.com`:
+If your Docker Hub username is `johnsmith` and your backend domain is `api-draw.yourdomain.com`:
 ```bash
 DOCKER_USERNAME="johnsmith"
-BACKEND_URL="https://api-draw.fuuzifylab.com"
+BACKEND_URL="https://api-draw.yourdomain.com"
 ```
 
 ### 3. Save and close the file
@@ -228,7 +228,7 @@ services:
 
 Find this line:
 ```yaml
-- FRONTEND_URL=https://draw.fuuzifylab.com
+- FRONTEND_URL=https://draw.yourdomain.com
 ```
 
 Make sure it matches YOUR actual frontend domain.
@@ -282,7 +282,7 @@ ExcaliDash Build & Push Script
 
 Configuration:
   Docker Username: johnsmith
-  Backend URL: https://api-draw.fuuzifylab.com
+  Backend URL: https://api-draw.yourdomain.com
   Version: 1.0.0
   ...
 
@@ -348,7 +348,7 @@ Click **"Save"** (not "Deploy" yet)
 1. In your excalidash service, click on **"backend"** container
 2. Go to **"Domains"** tab
 3. Click **"Add Domain"**
-4. Enter: `api-draw.fuuzifylab.com`
+4. Enter: `api-draw.yourdomain.com`
 5. Enable **"Generate SSL Certificate"** (Let's Encrypt)
 6. Click **"Save"**
 
@@ -357,7 +357,7 @@ Click **"Save"** (not "Deploy" yet)
 1. Go back and click on **"frontend"** container
 2. Go to **"Domains"** tab
 3. Click **"Add Domain"**
-4. Enter: `draw.fuuzifylab.com`
+4. Enter: `draw.yourdomain.com`
 5. Enable **"Generate SSL Certificate"** (Let's Encrypt)
 6. Click **"Save"**
 
@@ -372,7 +372,7 @@ Click **"Save"** (not "Deploy" yet)
 5. Click **"Save"**
 
 **What this does:**
-- Anyone visiting `draw.fuuzifylab.com` must enter this username/password
+- Anyone visiting `draw.yourdomain.com` must enter this username/password
 - Protects your app from public access
 - Solves the "don't expose to internet" security concern
 
@@ -394,8 +394,8 @@ Add two **A records**:
 **Example:**
 If your Coolify server IP is `123.45.67.89`:
 ```
-draw.fuuzifylab.com       →  123.45.67.89
-api-draw.fuuzifylab.com   →  123.45.67.89
+draw.yourdomain.com       →  123.45.67.89
+api-draw.yourdomain.com   →  123.45.67.89
 ```
 
 **Wait 1-5 minutes** for DNS to propagate.
@@ -404,10 +404,10 @@ api-draw.fuuzifylab.com   →  123.45.67.89
 
 ```bash
 # Check frontend domain
-nslookup draw.fuuzifylab.com
+nslookup draw.yourdomain.com
 
 # Check backend domain
-nslookup api-draw.fuuzifylab.com
+nslookup api-draw.yourdomain.com
 ```
 
 Both should return your server's IP address.
@@ -456,7 +456,7 @@ nginx: [notice] start worker processes
 
 ### 1. Visit your frontend
 
-Go to: `https://draw.fuuzifylab.com`
+Go to: `https://draw.yourdomain.com`
 
 **You should see:**
 - Browser prompts for username/password (Basic Auth)
@@ -492,7 +492,7 @@ Go to **Console** tab:
 
 ### 4. Check backend directly
 
-Visit: `https://api-draw.fuuzifylab.com/health`
+Visit: `https://api-draw.yourdomain.com/health`
 
 Should show:
 ```json
@@ -522,7 +522,7 @@ chmod +x build-and-push.sh
 
 **Check:**
 1. Is backend running in Coolify? (check logs)
-2. Is backend health check passing? `curl https://api-draw.fuuzifylab.com/health`
+2. Is backend health check passing? `curl https://api-draw.yourdomain.com/health`
 3. Did you build frontend with correct `BACKEND_URL`? (check build-and-push.sh)
 
 **Fix:**
@@ -537,7 +537,7 @@ If backend URL was wrong, rebuild:
 In `docker-compose.coolify.yml`, verify:
 ```yaml
 environment:
-  - FRONTEND_URL=https://draw.fuuzifylab.com
+  - FRONTEND_URL=https://draw.yourdomain.com
 ```
 
 Must match your ACTUAL frontend domain (with `https://`).
@@ -550,7 +550,7 @@ Must match your ACTUAL frontend domain (with `https://`).
 
 **Check:**
 ```bash
-nslookup draw.fuuzifylab.com
+nslookup draw.yourdomain.com
 ```
 
 **If it doesn't return your IP:**

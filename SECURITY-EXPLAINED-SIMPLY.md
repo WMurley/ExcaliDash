@@ -46,7 +46,7 @@ You mentioned being concerned about the warning "Don't expose to public internet
 ```
 ┌─────────────────────────────────────────┐
 │  Your Website (Deployed Application)    │
-│  https://draw.fuuzifylab.com            │
+│  https://draw.yourdomain.com            │
 │                                          │
 │  What people can do:                    │
 │  ⚠️  Access the actual application      │
@@ -79,14 +79,14 @@ When you deploy to Coolify, you'll add **Basic Authentication**. Here's what tha
 
 ### Without Basic Auth (Bad ❌):
 ```
-Internet User → https://draw.fuuzifylab.com → App loads immediately
+Internet User → https://draw.yourdomain.com → App loads immediately
                                               ↓
                                          They can use it!
 ```
 
 ### With Basic Auth (Good ✅):
 ```
-Internet User → https://draw.fuuzifylab.com → Login Prompt
+Internet User → https://draw.yourdomain.com → Login Prompt
                                               ↓
                                          "Enter Username & Password"
                                               ↓
@@ -188,19 +188,19 @@ Step in Coolify:
 
 ### Level 1: No Protection ❌ DON'T DO THIS
 ```
-draw.fuuzifylab.com → App loads for anyone
+draw.yourdomain.com → App loads for anyone
 Risk: HIGH
 ```
 
 ### Level 2: Basic Auth ✅ MINIMUM (Recommended for personal use)
 ```
-draw.fuuzifylab.com → Login screen → App loads only with password
+draw.yourdomain.com → Login screen → App loads only with password
 Risk: LOW
 ```
 
 ### Level 3: VPN Only 🔒 MAXIMUM (For very sensitive data)
 ```
-draw.fuuzifylab.com → Only accessible via VPN → App loads
+draw.yourdomain.com → Only accessible via VPN → App loads
 Risk: VERY LOW
 ```
 
@@ -212,7 +212,7 @@ Risk: VERY LOW
 
 ### Your Situation:
 - ✅ Public GitHub repo: **SAFE** - keep it public
-- 🔒 Deployed app on `draw.fuuzifylab.com`: **WILL BE SAFE** - when you add Basic Auth
+- 🔒 Deployed app on `draw.yourdomain.com`: **WILL BE SAFE** - when you add Basic Auth
 
 ### What the Warning Means:
 "Don't expose to public internet without additional hardening" means:
@@ -295,7 +295,7 @@ Your GitHub repo contains:
 
 ### "What exactly does Basic Auth do?"
 
-It puts a username/password login screen in front of your app. Anyone trying to access `draw.fuuzifylab.com` must login first.
+It puts a username/password login screen in front of your app. Anyone trying to access `draw.yourdomain.com` must login first.
 
 ---
 
