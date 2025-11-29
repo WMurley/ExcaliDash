@@ -1,0 +1,102 @@
+version: '3.8'
+
+# ============================================================================
+# ExcaliDash - Coolify Docker Compose Configuration
+# ============================================================================
+# This compose file is designed for deployment on Coolify.
+#
+# IMPORTANT: Before using this file:
+#   1. Build and push your custom images using build-and-push.sh
+#   2. Replace YOUR-DOCKERHUB-USERNAME with your actual Docker Hub username
+#   3. Update environment variables as needed
+#
+# Coolify Configuration:
+#   - Domains and Traefik labels are configured via Coolify UI
+#   - This file focuses on service definitions only
+#   - Frontend domain: draw.fuuzifylab.com (or your domain)
+#   - Backend domain: api-draw.fuuzifylab.com (or your domain)
+# ============================================================================
+
+services:
+  # ==========================================================================
+  # Backend Service - API and WebSocket Server
+  # ==========================================================================
+  backend:
+    image: YOUR-DOCKERHUB-USERNAME/excalidash-backend:latest
+    container_name: excalidash-backend
+    restart: unless-stopped
+
+    environment:
+      # Server Configuration
+      - PORT=3002
+      - NODE_ENV=production
+
+      # CORS Configuration - Frontend URL(s)
+      # For multiple origins, separate with commas
+      # Example: https://draw.fuuzifylab.com,https://draw.example.com
+      - FRONTEND_URL=https://draw.fuuzifylab.com
+
+      # Database Configuration
+      # Using SQLite with volume mount for persistence
+      - DATABASE_URL=file:/app/prisma/dev.db
+
+    volumes:
+      # Persist SQLite database and uploads
+      - excalidash_data:/app/prisma
+      - excalidash_uploads:/app/uploads
+
+    # Health check ensures backend is ready before frontend starts
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Labels for Coolify (optional - usually configured in UI)
+    # Uncomment and modify if needed
+    # labels:
+    #   - "coolify.managed=true"
+    #   - "coolify.version=1.0"
+
+  # ==========================================================================
+  # Frontend Service - Static Web Application
+  # ==========================================================================
+  frontend:
+    image: YOUR-DOCKERHUB-USERNAME/excalidash-frontend:latest
+    container_name: excalidash-frontend
+    restart: unless-stopped
+
+    # Wait for backend to be healthy before starting
+    depends_on:
+      backend:
+        condition: service_healthy
+
+    # No environment variables needed - backend URL is baked into build
+    # The frontend image was built with BACKEND_URL pointing to your API domain
+
+    # Labels for Coolify (optional - usually configured in UI)
+    # Uncomment and modify if needed
+    # labels:
+    #   - "coolify.managed=true"
+    #   - "coolify.version=1.0"
+
+# ============================================================================
+# Volumes - Persistent Storage
+# ============================================================================
+volumes:
+  # SQLite database storage
+  excalidash_data:
+    driver: local
+
+  # Uploaded files storage (if using file uploads)
+  excalidash_uploads:
+    driver: local
+
+# ============================================================================
+# Networks (optional - Coolify usually manages networking)
+# ============================================================================
+# Uncomment if you need custom network configuration
+# networks:
+#   default:
+#     name: excalidash-network
